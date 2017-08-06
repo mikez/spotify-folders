@@ -40,6 +40,9 @@ def parse(file_name, user_id):
     folder = {'type': 'folder', 'children': []}
     stack = []
     for row in rows:
+        # Note: '\r' marks end of repeated block. This might break in
+        # future versions of Spotify. An alternative solution is to read
+        # the number of repeats coded into the protobuf file.
         chunks = row.split(b'\r', 1)
         row = chunks[0]
         if row.startswith(b'ser:'):
@@ -50,6 +53,8 @@ def parse(file_name, user_id):
             stack.append(folder)
             folder = {'type': 'folder', 'children': []}
             tags = row.split(b':')
+            # Assuming folder names < 128 characters.
+            # Alternatively, do a protobuf varint parser to get length.
             folder['name'] = unquote_plus(tags[-1][:-1].decode('utf-8'))
             folder['uri'] = (
                 ('spotify:user:%s:folder:' % user_id)
