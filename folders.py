@@ -19,17 +19,16 @@ import os
 import sys
 
 
-# Change this if different on your machine.
-platform = sys.platform
-if platform == 'darwin':
-    path = '~/Library/Application Support/Spotify/PersistentCache/Storage'
-elif platform == 'win32':
-    path = os.path.join(os.getenv('LOCALAPPDATA'), 'Spotify', 'Storage')
-else:
-    cache_dir = os.getenv('XDG_CACHE_HOME', '~/.cache')
-    path = os.path.join(cache_dir, 'spotify/Storage')
+# Change if different on your machine.
+MAC_PERSISTENT_CACHE_PATH = (
+    '~/Library/Application Support/Spotify/PersistentCache/Storage')
+LINUX_PERSISTENT_CACHE_PATH = os.path.join(
+    os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage')
 
-PERSISTENT_CACHE_PATH = os.path.expanduser(path)
+PERSISTENT_CACHE_PATH = (
+    MAC_PERSISTENT_CACHE_PATH if sys.platform == 'darwin'
+    else LINUX_PERSISTENT_CACHE_PATH)
+
 
 def parse(file_name, user_id):
     """
@@ -90,7 +89,7 @@ def get_folder(folder_id, data):
 
 def get_newest_persistent_cache_file(path):
     """Get newest file in PersistentCache storage with "start-group" marker."""
-    path = path.replace('$HOME', os.getenv('HOME'))
+    path = os.path.expanduser(path)
     return subprocess.check_output((
         'grep -rl "start-group" "{path}" --null '
         '| xargs -0 ls -t | head -1'.format(path=path)),
