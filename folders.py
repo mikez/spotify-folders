@@ -16,19 +16,27 @@ except ImportError:
 import re
 import subprocess
 import os
+import sys
 
 
 # Change this if different on your machine.
-PERSISTENT_CACHE_PATH = (
-    '$HOME/Library/Application Support/Spotify/PersistentCache/Storage')
+platform = sys.platform
+if platform == 'darwin':
+    path = '~/Library/Application Support/Spotify/PersistentCache/Storage'
+elif platform == 'win32':
+    path = os.path.join(os.getenv('LOCALAPPDATA'), 'Spotify', 'Storage')
+else:
+    cache_dir = os.getenv('XDG_CACHE_HOME', '~/.cache')
+    path = os.path.join(cache_dir, 'spotify/Storage')
 
+PERSISTENT_CACHE_PATH = os.path.expanduser(path)
 
 def parse(file_name, user_id):
     """
-    Parse a Spotify PersistantStorage file with folder structure at start.
+    Parse a Spotify PersistentStorage file with folder structure at start.
 
     `file_name`
-        Location of a PersistantStorage file.
+        Location of a PersistentStorage file.
     `user_id`
         Specify a user id to use for folder URIs. Can also be a
         placeholder value like 'unknown'. (Background: this information
