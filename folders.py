@@ -87,13 +87,31 @@ def get_folder(folder_id, data):
                 return folder
 
 
-def get_newest_persistent_cache_file(path):
-    """Get newest file in PersistentCache storage with "start-group" marker."""
+def get_all_persistent_cache_files(path):
+    """Get all files in PersistentCache storage with "start-group" marker."""
     path = os.path.expanduser(path)
-    return subprocess.check_output((
-        'grep -rl "start-group" "{path}" --null '
-        '| xargs -0 ls -t | head -1'.format(path=path)),
-        shell=True).strip()
+    shell_command = (
+        'grep -rls "start-group" "{path}" --null | xargs -0 ls -t'
+    ).format(path=path)
+    output = subprocess.check_output(shell_command, shell=True).strip()
+    if output:
+        return output.split(b'\n')
+    else:
+        return []
+
+
+def print_info_text(number):
+    """Prints info text for `number` of PersistentCache storage files."""
+    suffix = 'y' if number == 1 else 'ies'
+    message = 'Found {number} folder hierarch{suffix} on this machine.'.format(
+        number=number, suffix=suffix)
+    if number > 1:
+        message += (
+            '\n\n'
+            'To see the second one, run'
+            '\n\n'
+            '  spotifyfolders --account 2\n')
+    print(message)
 
 
 def _process(file_name, args, user_id='unknown'):
@@ -128,6 +146,15 @@ if __name__ == '__main__':
               'Obtain this by dragging a folder into a Terminal window. '
               'Alternatively, click on a folder in Spotify and do Cmd+C.'))
     parser.add_argument(
+        '-i', '--info', action='store_const', const=True, default=False,
+        help='Information about Spotify folders on this machine.')
+    parser.add_argument(
+        '-a', '--account', dest='account', default='1',
+        help=('Sometimes a machine has multiple Spotify accounts. This gets a '
+              'Spotify folder hierachy of a specific account. 1 is the most '
+              'recently updated account, 2 is the second most recently '
+              'updated account, etc.'))
+    parser.add_argument(
         '--cache', dest='cache_dir', default=PERSISTENT_CACHE_PATH,
         help='Specify a custom PersistentCache directory to look for data in.')
     parser.add_argument(
@@ -135,9 +162,20 @@ if __name__ == '__main__':
         help='Show this help message and exit.')
 
     args = parser.parse_args()
-    cache_file_name = get_newest_persistent_cache_file(args.cache_dir)
-    if cache_file_name:
-        print(_process(cache_file_name, args))
+    cache_files = get_all_persistent_cache_files(args.cache_dir)
+
+    if args.info:
+        print_info_text(len(cache_files))
     else:
-        print('No data found in Spotify cache. If you have a custom cache '
-              'directory set, specify its path with the `--cache` flag.')
+        if not args.account.isdigit() or int(args.account) == 0:
+            print('Specify account as a positive number. See `--help`.')
+            exit(0)
+
+        cache_file_index = int(args.account) - 1
+        if cache_file_index >= len(cache_files):
+            print('No data found in Spotify cache. If you have a custom cache '
+                  'directory set, specify its path with the `--cache` flag.')
+            exit(0)
+
+        cache_file_name = cache_files[cache_file_index]
+        print(_process(cache_file_name, args))
