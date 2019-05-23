@@ -4,8 +4,8 @@ Get your Spotify folder hierarchy with playlists into a JSON file.
 
 ## Installation
 ```sh
-   curl -L https://git.io/folders > /usr/local/bin/spotifyfolders
-   chmod +x /usr/local/bin/spotifyfolders
+curl -L https://git.io/folders > /usr/local/bin/spotifyfolders
+chmod +x /usr/local/bin/spotifyfolders
 ```
 
 ## Get your entire folder hierarchy
@@ -13,7 +13,7 @@ Get your Spotify folder hierarchy with playlists into a JSON file.
 Simply run
 
 ```sh
-   $ spotifyfolders
+$ spotifyfolders
 ```
 
 ## Get a specific folder

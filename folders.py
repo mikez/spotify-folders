@@ -43,9 +43,11 @@ def parse(file_name, user_id):
     """
     with open(file_name, 'rb') as data_file:
         data = data_file.read()
+
     rows = re.split(b'spotify:[use]', data)
     folder = {'type': 'folder', 'children': []}
     stack = []
+
     for row in rows:
         # Note: '\r' marks end of repeated block. This might break in
         # future versions of Spotify. An alternative solution is to read
@@ -72,6 +74,13 @@ def parse(file_name, user_id):
             folder = parent
         if folder.get('children') and len(chunks) > 1:
             break
+
+    # close any remaining groups -- sometimes cache files contain errors.
+    while len(stack) > 0:
+        parent = stack.pop()
+        parent['children'].append(folder)
+        folder = parent
+
     return folder
 
 
