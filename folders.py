@@ -44,7 +44,8 @@ def parse(file_name, user_id):
     with open(file_name, 'rb') as data_file:
         data = data_file.read()
 
-    rows = re.split(b'spotify:[use]', data)
+    # spotify:playlist, spotify:start-group, spotify:end-group
+    rows = re.split(b'spotify:[pse]', data)
     folder = {'type': 'folder', 'children': []}
     stack = []
 
@@ -54,20 +55,25 @@ def parse(file_name, user_id):
         # the number of repeats coded into the protobuf file.
         chunks = row.split(b'\r', 1)
         row = chunks[0]
-        if row.startswith(b'ser:'):
+        if row.startswith(b'laylist:'):
             folder['children'].append({
                 'type': 'playlist',
-                'uri': 'spotify:u' + row[:-1].decode('utf-8')})
+                'uri': 'spotify:p' + row[:-1].decode('utf-8')
+            })
         elif row.startswith(b'tart-group:'):
             stack.append(folder)
-            folder = {'type': 'folder', 'children': []}
             tags = row.split(b':')
-            # Assuming folder names < 128 characters.
-            # Alternatively, do a protobuf varint parser to get length.
-            folder['name'] = unquote_plus(tags[-1][:-1].decode('utf-8'))
-            folder['uri'] = (
-                ('spotify:user:%s:folder:' % user_id)
-                + tags[-2].decode('utf-8'))
+            folder = dict(
+                # Assuming folder names < 128 characters.
+                # Alternatively, do a protobuf varint parser to get length.
+                name=unquote_plus(tags[-1][:-1].decode('utf-8')),
+                type='folder',
+                uri=(
+                    'spotify:user:%s:folder:' % user_id
+                    + tags[-2].decode('utf-8')
+                ),
+                children=[]
+            )
         elif row.startswith(b'nd-group:'):
             parent = stack.pop()
             parent['children'].append(folder)

@@ -34,10 +34,10 @@ $ spotifyfolders https://open.spotify.com/user/example/folder/f0dcb1c2b1a98521
     "uri": "spotify:user:example:folder:8212237ac7347bfe",
     "children": [{
         "type": "playlist",
-        "uri": "spotify:user:spotify:playlist:37i9dQZF1DXdCsscAsbRNz"
+        "uri": "spotify:playlist:37i9dQZF1DXdCsscAsbRNz"
      }, {
         "type": "playlist",
-        "uri": "spotify:user:spotify:playlist:37i9dQZF1DWZd79rJ6a7lp"
+        "uri": "spotify:playlist:37i9dQZF1DWZd79rJ6a7lp"
      }]
   }, {
     "name": "Winter",
@@ -45,7 +45,7 @@ $ spotifyfolders https://open.spotify.com/user/example/folder/f0dcb1c2b1a98521
     "uri": "spotify:user:example:folder:4b254ce1b7f5e23d"
     "children": [{
       "type": "playlist",
-      "uri": "spotify:user:spotify:playlist:37i9dQZF1DWSiZVO2J6WeI"
+      "uri": "spotify:playlist:37i9dQZF1DWSiZVO2J6WeI"
     }]
   }
 }
