@@ -9,14 +9,14 @@ from __future__ import print_function
 
 import argparse
 import json
+import os
+import re
+import subprocess
+import sys
 try:
     from urllib import unquote_plus  # Python 2
 except ImportError:
     from urllib.parse import unquote_plus  # Python 3
-import re
-import subprocess
-import os
-import sys
 
 
 # Change if different on your machine.
