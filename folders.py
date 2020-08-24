@@ -30,12 +30,14 @@ PERSISTENT_CACHE_PATH = (
     else LINUX_PERSISTENT_CACHE_PATH)
 
 
-def parse(file_name, user_id):
+def parse(file_name, playlist_names_map, user_id):
     """
     Parse a Spotify PersistentStorage file with folder structure at start.
 
     `file_name`
         Location of a PersistentStorage file.
+    `playlist_names_map`
+        A dictionary for looking up the name of a playlist given its URI.
     `user_id`
         Specify a user id to use for folder URIs. Can also be a
         placeholder value like 'unknown'. (Background: this information
@@ -56,9 +58,11 @@ def parse(file_name, user_id):
         chunks = row.split(b'\r', 1)
         row = chunks[0]
         if row.startswith(b'laylist:'):
+            uri = 'spotify:p' + row[:-1].decode('utf-8')
             folder['children'].append({
+                'name': playlist_names_map[uri],
                 'type': 'playlist',
-                'uri': 'spotify:p' + row[:-1].decode('utf-8')
+                'uri': uri
             })
         elif row.startswith(b'tart-group:'):
             stack.append(folder)
@@ -115,6 +119,37 @@ def get_all_persistent_cache_files(path):
         return []
 
 
+def get_playlist_names_file(path):
+    """Get file in PersistentCache storage with the most 'spotify:playlist:' occurrences."""
+    path = os.path.expanduser(path)
+    shell_command = (
+        'grep -rcs "spotify:playlist:" "{path}"'
+    ).format(path=path)
+    file_counts = subprocess.check_output(shell_command, shell=True).strip().split(b'\n')
+    # Get line with highest number of matches from list with entries of form
+    # 'filepath:count'
+    file_name_line = max(file_counts, key=lambda l: int(l.split(b':')[1]))
+    file_name = file_name_line.split(b':')[0]
+    return file_name
+
+
+def get_playlist_names_map(path):
+    """Get map from playlist URI to playlist name"""
+    file_name = get_playlist_names_file(path)
+    with open(file_name, 'rb') as f:
+        data = f.read()
+
+    regex = re.compile(b'(spotify:playlist:.{22})\x09')
+    mapping = {}
+    for m in regex.finditer(data):
+        uri = m.groups()[0]
+        name_length = data[m.end()]
+        name = data[m.end() + 1 : m.end() + 1 + name_length]
+        mapping[uri.decode('utf-8')] = name.decode('utf-8')
+
+    return mapping
+
+
 def print_info_text(number):
     """Prints info text for `number` of PersistentCache storage files."""
     suffix = 'y' if number == 1 else 'ies'
@@ -129,7 +164,7 @@ def print_info_text(number):
     print(message)
 
 
-def _process(file_name, args, user_id='unknown'):
+def _process(file_name, playlist_names_map, args, user_id='unknown'):
     # preprocessing
     if args.folder:
         uri = args.folder
@@ -139,7 +174,7 @@ def _process(file_name, args, user_id='unknown'):
         separator = '/' if uri.find('/') > 0 else ':'
         user_id = uri.split(separator)[-3]
         folder_id = uri.split(separator)[-1]
-    data = parse(file_name, user_id=user_id)
+    data = parse(file_name, playlist_names_map, user_id=user_id)
     # postprocessing
     if args.folder:
         data = get_folder(folder_id, data)
@@ -193,4 +228,5 @@ if __name__ == '__main__':
             exit(0)
 
         cache_file_name = cache_files[cache_file_index]
-        print(_process(cache_file_name, args))
+        playlist_names_map = get_playlist_names_map(args.cache_dir)
+        print(_process(cache_file_name, playlist_names_map, args))
