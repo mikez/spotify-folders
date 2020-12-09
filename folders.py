@@ -58,7 +58,7 @@ def parse(file_name, user_id):
         if row.startswith(b'playlist:'):
             folder['children'].append({
                 'type': 'playlist',
-                'uri': 'spotify:p' + row[:-1].decode('utf-8')
+                'uri': 'spotify:' + row[:-1].decode('utf-8')
             })
         elif row.startswith(b'start-group:'):
             stack.append(folder)
