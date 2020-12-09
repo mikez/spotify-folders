@@ -45,7 +45,7 @@ def parse(file_name, user_id):
         data = data_file.read()
 
     # spotify:playlist, spotify:start-group, spotify:end-group
-    rows = re.split(b'spotify:[pse]', data)
+    rows = re.split(br'spotify:(?=[pse])', data)
     folder = {'type': 'folder', 'children': []}
     stack = []
 
@@ -55,12 +55,12 @@ def parse(file_name, user_id):
         # the number of repeats coded into the protobuf file.
         chunks = row.split(b'\r', 1)
         row = chunks[0]
-        if row.startswith(b'laylist:'):
+        if row.startswith(b'playlist:'):
             folder['children'].append({
                 'type': 'playlist',
-                'uri': 'spotify:p' + row[:-1].decode('utf-8')
+                'uri': 'spotify:' + row[:-1].decode('utf-8')
             })
-        elif row.startswith(b'tart-group:'):
+        elif row.startswith(b'start-group:'):
             stack.append(folder)
             tags = row.split(b':')
             folder = dict(
@@ -74,7 +74,7 @@ def parse(file_name, user_id):
                 ),
                 children=[]
             )
-        elif row.startswith(b'nd-group:'):
+        elif row.startswith(b'end-group:'):
             parent = stack.pop()
             parent['children'].append(folder)
             folder = parent
