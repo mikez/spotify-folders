@@ -45,7 +45,7 @@ def parse(file_name, user_id):
         data = data_file.read()
 
     # spotify:playlist, spotify:start-group, spotify:end-group
-    rows = re.split(r'spotify:(?=[pse])', data)
+    rows = re.split(br'spotify:(?=[pse])', data)
     folder = {'type': 'folder', 'children': []}
     stack = []
 
