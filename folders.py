@@ -40,6 +40,26 @@ def parse(file_name, user_id):
         Specify a user id to use for folder URIs. Can also be a
         placeholder value like 'unknown'. (Background: this information
         doesn't seem to be provided in the source file.)
+
+    FILE STRUCTURE
+    --------------
+    The file resembles a binary Protocol Buffers file with some twists.
+    Its current structure seems to be as follows:
+        
+      1. `00` hexstring.
+      2. Spotify version number. Encoded as varint.
+         (E.g. `114800625` is version `1.1.48.625`.)
+      3. `A40115` hexstring with unknown meaning.
+      4. Number of {playlist, start-group, end-group} strings.
+         Encoded as varint of `(number << 3) | 001`.
+      5. List of any of these three playlist string types:
+        - playlist identifier
+          (e.g. "spotify:playlist:37i9dQZF1DXdCsscAsbRNz")
+        - folder start identifier
+          (e.g. "spotify:start-group:8212237ac7347bfe:Summer")
+        - folder end identifier
+          (e.g. "spotify:end-group:8212237ac7347bfe")
+      6. Other content we currently ignore.
     """
     with open(file_name, 'rb') as data_file:
         data = data_file.read()
@@ -49,11 +69,14 @@ def parse(file_name, user_id):
     folder = {'type': 'folder', 'children': []}
     stack = []
 
-    for row in rows:
-        # Note: '\r' marks end of repeated block. This might break in
-        # future versions of Spotify. An alternative solution is to read
-        # the number of repeats coded into the protobuf file.
-        chunks = row.split(b'\r', 1)
+    for index, row in enumerate(rows):
+        # Note: '\x10' marks the end of the entire list. This might
+        # break in future versions of Spotify. Here are two alternative
+        # solutions one might consider then:
+        #   1. Read the length encoded as a varint before each string.
+        #   2. Read the number of repeats specified in the beginning of
+        #      the file.
+        chunks = row.split(b'\x10', 1)
         row = chunks[0]
         if row.startswith(b'playlist:'):
             folder['children'].append({
@@ -78,10 +101,11 @@ def parse(file_name, user_id):
             parent = stack.pop()
             parent['children'].append(folder)
             folder = parent
+
         if folder.get('children') and len(chunks) > 1:
             break
 
-    # close any remaining groups -- sometimes cache files contain errors.
+    # close any remaining groups -- sometimes a file contains errors.
     while len(stack) > 0:
         parent = stack.pop()
         parent['children'].append(folder)
@@ -135,17 +159,20 @@ def _process(file_name, args, user_id='unknown'):
         uri = args.folder
         if '/' not in uri and ':' not in uri:
             print('Specify folder as a URL or Spotify URI. See `--help`.')
-            return
+            sys.exit(2)
         separator = '/' if uri.find('/') > 0 else ':'
         user_id = uri.split(separator)[-3]
         folder_id = uri.split(separator)[-1]
+
     data = parse(file_name, user_id=user_id)
+
     # postprocessing
     if args.folder:
         data = get_folder(folder_id, data)
         if not data:
             print('Folder not found :(')
-            return
+            sys.exit(1)
+
     return json.dumps(data)
 
 
@@ -184,13 +211,13 @@ if __name__ == '__main__':
     else:
         if not args.account.isdigit() or int(args.account) == 0:
             print('Specify account as a positive number. See `--help`.')
-            exit(0)
+            sys.exit(2)
 
         cache_file_index = int(args.account) - 1
         if cache_file_index >= len(cache_files):
             print('No data found in Spotify cache. If you have a custom cache '
                   'directory set, specify its path with the `--cache` flag.')
-            exit(0)
+            sys.exit(2)
 
         cache_file_name = cache_files[cache_file_index]
         print(_process(cache_file_name, args))

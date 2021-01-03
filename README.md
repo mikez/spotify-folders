@@ -51,5 +51,11 @@ $ spotifyfolders https://open.spotify.com/user/example/folder/f0dcb1c2b1a98521
 }
 ```
 
+## Learn about more options
+
+```sh
+$ spotifyfolders --help
+```
+
 ## Background
 The Spotify Web API does currently not support getting the folder hierarchy. However, one can (as of this writing) find it in the local Spotify cache. This script extracts the data from the cache and returns it in a JSON-formatted way.
