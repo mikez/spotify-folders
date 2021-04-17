@@ -23,8 +23,8 @@ $ spotifyfolders
 ```sh
 $ spotifyfolders https://open.spotify.com/user/example/folder/f0dcb1c2b1a98521
 ```
-```javascript
-{
+```js
+[{
   "name": "Seasons",
   "type": "folder",
   "uri": "spotify:user:example:folder:f0dcb1c2b1a98521",
@@ -42,13 +42,13 @@ $ spotifyfolders https://open.spotify.com/user/example/folder/f0dcb1c2b1a98521
   }, {
     "name": "Winter",
     "type": "folder",
-    "uri": "spotify:user:example:folder:4b254ce1b7f5e23d"
+    "uri": "spotify:user:example:folder:4b254ce1b7f5e23d",
     "children": [{
       "type": "playlist",
       "uri": "spotify:playlist:37i9dQZF1DWSiZVO2J6WeI"
     }]
   }
-}
+}]
 ```
 
 ## Learn about more options
