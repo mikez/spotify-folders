@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 try:
     from urllib import unquote_plus  # Python 2
@@ -24,9 +23,11 @@ MAC_PERSISTENT_CACHE_PATH = (
     '~/Library/Application Support/Spotify/PersistentCache/Storage')
 LINUX_PERSISTENT_CACHE_PATH = os.path.join(
     os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage')
+WINDOWS_PERSISTENT_CACHE_PATH = 'C:\\Cache\\Spotify'
 
 PERSISTENT_CACHE_PATH = (
     MAC_PERSISTENT_CACHE_PATH if sys.platform == 'darwin'
+    else WINDOWS_PERSISTENT_CACHE_PATH if sys.platform == 'win32'
     else LINUX_PERSISTENT_CACHE_PATH)
 
 
@@ -128,15 +129,22 @@ def get_folder(folder_id, data):
 
 def get_all_persistent_cache_files(path):
     """Get all files in PersistentCache storage with "start-group" marker."""
+    regex = ".*start-group.*"
+    regObj = re.compile(regex)
+    res = []
     path = os.path.expanduser(path)
-    shell_command = (
-        'grep -rls "start-group" "{path}" --null | xargs -0 ls -t'
-    ).format(path=path)
-    output = subprocess.check_output(shell_command, shell=True).strip()
-    if output:
-        return output.split(b'\n')
-    else:
-        return []
+    for root, dirs, fnames in os.walk(path):
+        for fname in fnames:
+            try:
+                with open(os.path.join(root, fname), encoding="cp437") as f:
+                    for line in f:
+                        if regObj.match(line):
+                            res.append(os.path.join(root, fname))
+                            break
+            except PermissionError:
+                pass
+
+    return res
 
 
 def print_info_text(number):
