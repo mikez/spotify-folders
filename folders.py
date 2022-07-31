@@ -128,24 +128,30 @@ def get_folder(folder_id, data):
                 return folder
 
 
+def find_in_file(string, filepath):
+    """Check if a file contains the given string."""
+    try:
+        with open(filepath, mode='rb') as f:
+            for line in f:
+                if string in line:
+                    return True
+    except (OSError, IOError):
+        return False
+
+    return False
+
+
 def get_all_persistent_cache_files(path):
     """Get all files in PersistentCache storage with "start-group" marker."""
-    regex = "start-group"
-    regObj = re.compile(regex)
-    res = []
+    result = []
     path = os.path.expanduser(path)
     for root, dirs, fnames in os.walk(path):
         for fname in fnames:
-            try:
-                with open(os.path.join(root, fname), encoding="latin_1") as f:
-                    for line in f:
-                        if regObj.search(line):
-                            res.append(os.path.join(root, fname))
-                            break
-            except PermissionError:
-                pass
+            fullpath = os.path.join(root, fname)
+            if find_in_file(b'start-group', fullpath):
+                result.append(fullpath)
 
-    return res
+    return result
 
 
 def print_info_text(number):
