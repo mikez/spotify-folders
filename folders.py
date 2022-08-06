@@ -128,8 +128,20 @@ def parse(file_name, user_id):
     return folder
 
 
+def get_all_persistent_cache_files(path):
+    """Get all files in PersistentCache storage with "start-group" marker."""
+    result = []
+    path = os.path.expanduser(path)
+    for dirpath, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            if find_in_file(b'start-group', filepath):
+                result.append(filepath)
+
+    return result
+
 def get_folder(folder_id, data):
-    """Get data for a particular folder in parsed data."""
+    """Get a specific folder in data output by `parse()`."""
     data_type = data.get('type')
     if data_type == 'folder':
         if data.get('uri', '').endswith(folder_id):
@@ -138,7 +150,6 @@ def get_folder(folder_id, data):
             folder = get_folder(folder_id, child)
             if folder:
                 return folder
-
 
 def find_in_file(string, filepath):
     """Check if a file contains the given string."""
@@ -151,19 +162,6 @@ def find_in_file(string, filepath):
         return False
 
     return False
-
-
-def get_all_persistent_cache_files(path):
-    """Get all files in PersistentCache storage with "start-group" marker."""
-    result = []
-    path = os.path.expanduser(path)
-    for root, dirs, fnames in os.walk(path):
-        for fname in fnames:
-            fullpath = os.path.join(root, fname)
-            if find_in_file(b'start-group', fullpath):
-                result.append(fullpath)
-
-    return result
 
 
 def print_info_text(number):
@@ -220,9 +218,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '-a', '--account', dest='account', default='1',
         help=('Sometimes a machine has multiple Spotify accounts. This gets a '
-              'Spotify folder hierachy of a specific account. 1 is the most '
-              'recently updated account, 2 is the second most recently '
-              'updated account, etc.'))
+              'Spotify folder hierachy of a specific account. 1 is the first, '
+              '2 is the second, etc. To see how many accounts there are, '
+              'use the `-i` flag.'))
     parser.add_argument(
         '--cache', dest='cache_dir', default=PERSISTENT_CACHE_PATH,
         help='Specify a custom PersistentCache directory to look for data in.')
@@ -243,7 +241,9 @@ if __name__ == '__main__':
         cache_file_index = int(args.account) - 1
         if cache_file_index >= len(cache_files):
             print('No data found in Spotify cache. If you have a custom cache '
-                  'directory set, specify its path with the `--cache` flag.')
+                  'directory set, specify its path with the `--cache` flag. '
+                  'Also, in the Spotify app, check '
+                  'Settings -> Offline storage location.')
             sys.exit(2)
 
         cache_file_name = cache_files[cache_file_index]

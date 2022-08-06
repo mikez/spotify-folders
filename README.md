@@ -1,6 +1,6 @@
 Get your Spotify folder hierarchy with playlists into a JSON file.
 
-**Requirements**: Spotify for Mac, Linux or Windows.
+**Requirements**: Spotify for Mac, Linux, or Windows.
 
 ## Installation
 ```sh
