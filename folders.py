@@ -107,7 +107,7 @@ def parse(file_name, user_id):
                 type='folder',
                 uri=(
                     'spotify:user:%s:folder:' % user_id
-                    + tags[-2].decode('utf-8')
+                    + tags[-2].decode('utf-8').zfill(16)
                 ),
                 children=[]
             )
