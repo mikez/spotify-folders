@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 try:
     from urllib import unquote_plus  # Python 2
@@ -19,15 +18,30 @@ except ImportError:
     from urllib.parse import unquote_plus  # Python 3
 
 
-# Change if different on your machine.
-MAC_PERSISTENT_CACHE_PATH = (
-    '~/Library/Application Support/Spotify/PersistentCache/Storage')
-LINUX_PERSISTENT_CACHE_PATH = os.path.join(
-    os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage')
-
-PERSISTENT_CACHE_PATH = (
-    MAC_PERSISTENT_CACHE_PATH if sys.platform == 'darwin'
-    else LINUX_PERSISTENT_CACHE_PATH)
+if sys.platform == 'darwin':
+    # Mac
+    PERSISTENT_CACHE_PATH = (
+        '~/Library/Application Support/Spotify/PersistentCache/Storage'
+    )
+elif sys.platform == 'win32':
+    # Windows, via Microsoft store or standalone
+    windows_appdata_path = os.getenv('LOCALAPPDATA')
+    windows_store_path = os.path.join(
+        windows_appdata_path,
+        'Packages\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0\\LocalState'
+        '\\Spotify\\Storage'
+    )
+    if os.path.exists(windows_store_path):
+        PERSISTENT_CACHE_PATH = windows_store_path
+    else:
+        PERSISTENT_CACHE_PATH = os.path.join(
+            windows_appdata_path, 'Spotify\\Storage'
+        )
+else:
+    # Linux
+    PERSISTENT_CACHE_PATH = os.path.join(
+        os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage'
+    )
 
 
 def parse(file_name, user_id):
@@ -126,17 +140,30 @@ def get_folder(folder_id, data):
                 return folder
 
 
+def find_in_file(string, filepath):
+    """Check if a file contains the given string."""
+    try:
+        with open(filepath, mode='rb') as f:
+            for line in f:
+                if string in line:
+                    return True
+    except (OSError, IOError):
+        return False
+
+    return False
+
+
 def get_all_persistent_cache_files(path):
     """Get all files in PersistentCache storage with "start-group" marker."""
+    result = []
     path = os.path.expanduser(path)
-    shell_command = (
-        'grep -rls "start-group" "{path}" --null | xargs -0 ls -t'
-    ).format(path=path)
-    output = subprocess.check_output(shell_command, shell=True).strip()
-    if output:
-        return output.split(b'\n')
-    else:
-        return []
+    for root, dirs, fnames in os.walk(path):
+        for fname in fnames:
+            fullpath = os.path.join(root, fname)
+            if find_in_file(b'start-group', fullpath):
+                result.append(fullpath)
+
+    return result
 
 
 def print_info_text(number):
