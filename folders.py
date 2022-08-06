@@ -18,18 +18,30 @@ except ImportError:
     from urllib.parse import unquote_plus  # Python 3
 
 
-# Change if different on your machine.
-MAC_PERSISTENT_CACHE_PATH = (
-    '~/Library/Application Support/Spotify/PersistentCache/Storage')
-LINUX_PERSISTENT_CACHE_PATH = os.path.join(
-    os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage')
-WINDOWS_PERSISTENT_CACHE_PATH = os.path.join(
-    os.getenv('LOCALAPPDATA'), 'Spotify\\Storage')
-
-PERSISTENT_CACHE_PATH = (
-    MAC_PERSISTENT_CACHE_PATH if sys.platform == 'darwin'
-    else WINDOWS_PERSISTENT_CACHE_PATH if sys.platform == 'win32'
-    else LINUX_PERSISTENT_CACHE_PATH)
+if sys.platform == 'darwin':
+    # Mac
+    PERSISTENT_CACHE_PATH = (
+        '~/Library/Application Support/Spotify/PersistentCache/Storage'
+    )
+elif sys.platform == 'win32':
+    # Windows, via Microsoft store or standalone
+    windows_appdata_path = os.getenv('LOCALAPPDATA')
+    windows_store_path = os.path.join(
+        windows_appdata_path,
+        'Packages\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0\\LocalState'
+        '\\Spotify\\Storage'
+    )
+    if os.path.exists(windows_store_path):
+        PERSISTENT_CACHE_PATH = windows_store_path
+    else:
+        PERSISTENT_CACHE_PATH = os.path.join(
+            windows_appdata_path, 'Spotify\\Storage'
+        )
+else:
+    # Linux
+    PERSISTENT_CACHE_PATH = os.path.join(
+        os.getenv('XDG_CACHE_HOME', '~/.cache'), 'spotify/Storage'
+    )
 
 
 def parse(file_name, user_id):
