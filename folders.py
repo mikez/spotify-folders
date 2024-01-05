@@ -21,7 +21,11 @@ except ImportError:
     from urllib.parse import unquote_plus  # Python 3
 
 
-LEVELDB_ROOTLIST_KEY = b"!pl#slc#\x1dspotify:user:{}:rootlist#"
+# Note(2024-01-05): the logic of the symbol before "spotify:user"
+# is not clear at this time. We've encountered two variations so far.
+# See: https://github.com/mikez/spotify-folders/issues/10
+LEVELDB_ROOTLIST_KEY_1 = b"!pl#slc#\x1dspotify:user:{}:rootlist#"
+LEVELDB_ROOTLIST_KEY_2 = b"!pl#slc# spotify:user:{}:rootlist#"
 
 if sys.platform == "darwin":
     # Mac
@@ -146,7 +150,25 @@ def get_leveldb_rootlist(username, cachedir):
         dirpath = os.path.join(rootpath, username) + "-user"
     else:
         dirpath = rootpath
-    return SpotifyLevelDB.get(username, dirpath)
+    key_templates = (LEVELDB_ROOTLIST_KEY_1, LEVELDB_ROOTLIST_KEY_2)
+    if sys.platform == "win32":  # based on @Nitemice research
+        key_templates.reverse()
+
+    # Four attempts
+    for slow_mode in (False, True):
+        for key_template in key_templates:
+            key = (
+                SpotifyLevelDB.make_key_from_username(key_template, username)
+                if username
+                else key_template
+            )
+            result = SpotifyLevelDB.get(
+                key, dirpath, key_is_template=not username, ignore_comparator=slow_mode
+            )
+            if result[1]:
+                return result
+
+    return result
 
 
 def get_usernames(users_directory_path):
@@ -205,21 +227,25 @@ def _process(raw_data, args, user_id="unknown", folder_id=None):
 
 class SpotifyLevelDB:
     @staticmethod
-    def get(username, db_dirpath):
-        # passing None as a username will try to deduce a username
-        # from the given files; the last modified user is returned first.
-        key = SpotifyLevelDB.make_key_from_username(username) if username else None
+    def get(key, db_dirpath, key_is_template=False, ignore_comparator=False):
+        # passing a key with '{}' in it and `key_is_template=True` will
+        # try to deduce a username from the given files; the last
+        # modified user is returned first. The username is put at '{}'.
         files_to_examine = get_files_in_dir_modified_last_first(db_dirpath)
 
         def seek(file_suffix, reader_cls, key):
             for filepath in files_to_examine:
                 if not filepath.endswith(file_suffix):
                     continue
-                if not key:
-                    key = SpotifyLevelDB.make_key_from_filepath(filepath)
-                    if not key:
+                if key_is_template:
+                    potential_key = SpotifyLevelDB.make_key_from_filepath(key, filepath)
+                    if not potential_key:
                         continue
-                value = reader_cls.find(key, filepath)
+                    key = potential_key
+                if reader_cls == TableReader and ignore_comparator:
+                    value = reader_cls.slow_find(key, filepath)
+                else:
+                    value = reader_cls.find(key, filepath)
                 if value:
                     username = SpotifyLevelDB.extract_username_from_filepath(filepath)
                     return username, value
@@ -247,14 +273,15 @@ class SpotifyLevelDB:
                 return tail.rsplit("-")[0]
 
     @staticmethod
-    def make_key_from_filepath(filepath):
+    def make_key_from_filepath(key_template, filepath):
         username = SpotifyLevelDB.extract_username_from_filepath(filepath)
-        if username:
-            return SpotifyLevelDB.make_key_from_username(username)
+        if not username:
+            return
+        return SpotifyLevelDB.make_key_from_username(key_template, username)
 
     @staticmethod
-    def make_key_from_username(username):
-        return LEVELDB_ROOTLIST_KEY.replace(b"{}", username.encode())
+    def make_key_from_username(key_template, username):
+        return key_template.replace(b"{}", username.encode())
 
 
 # Descriptor files
@@ -420,6 +447,25 @@ class TableReader:
                     if internal_key.user_key == target_key:
                         return value
                 break
+
+    @staticmethod
+    def slow_find(target_key, filepath):
+        """
+        Iterate through every single key.
+
+        This may be useful in instances where we're not quite sure
+        what the underlying comparator function is.
+        """
+        assert isinstance(target_key, bytes)
+        # return at first key found, since it seems repeated keys
+        # are sorted by last-inserted first.
+        with open(filepath, "rb") as file:
+            reader = BytesReader(file, filesize(filepath))
+            footer = TableFooter(reader)
+            for internal_key, handle in TableIndex(footer.index_handle, reader):
+                for internal_key, value in TableData(handle, reader):
+                    if internal_key.user_key == target_key:
+                        return value
 
 
 class TableBlock:
@@ -617,6 +663,10 @@ def bytestring_less_or_equal(bytestring1, bytestring2):
     In LevelDB tables, you can specify a custom comparator.
     It seems Spotify's comparator behaves a bit like this;
     they call it "greenbase.KeyComparator".
+
+    Note(2024-01-05): Analyzing the order of the keys show
+    there is more complexity to this; it is still unclear
+    how the precise ordering is. This function is incomplete.
     """
     # Compare byte by byte
     group_separator = 0x1D
