@@ -150,7 +150,7 @@ def get_leveldb_rootlist(username, cachedir):
         dirpath = os.path.join(rootpath, username) + "-user"
     else:
         dirpath = rootpath
-    key_templates = (LEVELDB_ROOTLIST_KEY_1, LEVELDB_ROOTLIST_KEY_2)
+    key_templates = [LEVELDB_ROOTLIST_KEY_1, LEVELDB_ROOTLIST_KEY_2]
     if sys.platform == "win32":  # based on @Nitemice research
         key_templates.reverse()
 
