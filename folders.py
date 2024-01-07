@@ -197,7 +197,7 @@ def print_info_text(user_ids):
     )
 
 
-def _process(raw_data, args, user_id="unknown", folder_id=None):
+def _process(raw_data, user_id="unknown", folder_id=None):
     data = parse(raw_data, user_id=user_id)
 
     # postprocessing
@@ -277,7 +277,7 @@ class SpotifyLevelDB:
     def make_key_from_user_id(key_template, user_id):
         user_id_as_bytes = user_id.encode()
         rootlist_id = ROOTLIST_ID.replace(b"{}", user_id_as_bytes)
-        rootlist_id_length = len(rootlist_id).to_bytes(1, byteorder="little")
+        rootlist_id_length = BytesMaker.varint(len(rootlist_id))
         return key_template.replace(b"{}", rootlist_id_length + rootlist_id)
 
 
@@ -438,7 +438,8 @@ class TableReader:
             reader = BytesReader(file, filesize(filepath))
             footer = TableFooter(reader)
             for internal_key, handle in TableIndex(footer.index_handle, reader):
-                if not bytestring_less_or_equal(target_key, internal_key.user_key):
+                result = bytestring_less_or_equal(target_key, internal_key.user_key)
+                if not result:
                     continue
                 for internal_key, value in TableData(handle, reader):
                     if internal_key.user_key == target_key:
@@ -638,6 +639,22 @@ class BytesReader:
         return self.file.seek(target, whence)
 
 
+class BytesMaker:
+    @staticmethod
+    def varint(integer):
+        """Encode integer into varint bytes."""
+        buffer = bytearray()
+        rest = integer
+        while True:
+            value = rest & 0b01111111
+            rest >>= 7
+            if not rest:
+                break
+            buffer.append(value | 0b10000000)
+        buffer.append(value)
+        return bytes(buffer)
+
+
 class LimitedFile:
     def __init__(self, file, n_bytes):
         self.file = file
@@ -661,23 +678,73 @@ def bytestring_less_or_equal(bytestring1, bytestring2):
     It seems Spotify's comparator behaves a bit like this;
     they call it "greenbase.KeyComparator".
 
-    Note(2024-01-05): Analyzing the order of the keys show
-    there is more complexity to this; it is still unclear
-    how the precise ordering is. This function is incomplete.
-    """
-    # Compare byte by byte
-    group_separator = 0x1D
-    for byte1, byte2 in zip(bytestring1, bytestring2):
-        if byte1 == group_separator and byte2 != group_separator:
-            return False
-        if byte1 != group_separator and byte2 == group_separator:
-            return True
-        if byte1 < byte2:
-            return True
-        elif byte1 > byte2:
-            return False
+    Three types:
 
-    # If all bytes are equal, check the length
+      !a#b#{DATA}
+
+      #a#b#c#{DATA}
+
+      /a#b[#c[#d]]
+
+    {DATA} is encoded like this:
+
+      [ {length}{data}# ]+
+
+    where {length} is a varint encoding of the bytelength of the {data}.
+
+    The comparator ignores the value of the {length} when comparing;
+    otherwise it seems alphanumeric.
+    """
+    # extract key-type
+    type1 = bytestring1[:1]
+    type2 = bytestring2[:1]
+    if type1 != type2 or type1 == b"":
+        return type1 <= type2
+
+    # type "/" and other unknowns
+    if type1 not in (b"!", b"#"):
+        return bytestring1 <= bytestring1
+
+    # type "!" or "#"
+    prefix_hashes_left = 2 if type1 == b"!" else 4
+    read_varint = False
+    reader1 = BytesReader.from_bytes(bytestring1)
+    reader2 = BytesReader.from_bytes(bytestring2)
+    while reader1.bytes_left() and reader2.bytes_left():
+        # --------------------------------------------------
+        # prefix
+        # --------------------------------------------------
+        if prefix_hashes_left > 0:
+            byte1, byte2 = reader1.n_bytes(1), reader2.n_bytes(1)
+            if byte1 < byte2:
+                return True
+            elif byte1 > byte2:
+                return False
+            elif byte1 == b"#":  # same bytes
+                prefix_hashes_left -= 1
+                if prefix_hashes_left == 0:
+                    read_varint = True
+            continue
+        # --------------------------------------------------
+        # suffix with data
+        # --------------------------------------------------
+        if read_varint:
+            # varints seem to be skipped in the comparison
+            n1 = reader1.varint()
+            n2 = reader2.varint()
+            read_varint = False
+            continue
+            # read data: the +1 is to include concluding "#"
+        bytes1, bytes2 = reader1.n_bytes(n1 + 1), reader2.n_bytes(n2 + 1)
+        if bytes1 < bytes2:
+            return True
+        elif bytes1 > bytes2:
+            return False
+        else:  # same bytes
+            assert bytes1[-1:] == b"#"
+            read_varint = True
+
+    # If all bytes are equal so far, check the length
     return len(bytestring1) <= len(bytestring2)
 
 
