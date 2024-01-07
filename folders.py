@@ -21,11 +21,8 @@ except ImportError:
     from urllib.parse import unquote_plus  # Python 3
 
 
-# Note(2024-01-05): the logic of the symbol before "spotify:user"
-# is not clear at this time. We've encountered two variations so far.
-# See: https://github.com/mikez/spotify-folders/issues/10
-LEVELDB_ROOTLIST_KEY_1 = b"!pl#slc#\x1dspotify:user:{}:rootlist#"
-LEVELDB_ROOTLIST_KEY_2 = b"!pl#slc# spotify:user:{}:rootlist#"
+LEVELDB_ROOTLIST_KEY = b"!pl#slc#{}#"
+ROOTLIST_ID = b"spotify:user:{}:rootlist"
 
 if sys.platform == "darwin":
     # Mac
@@ -144,34 +141,31 @@ def get_folder(folder_id, data):
                 return folder
 
 
-def get_leveldb_rootlist(username, cachedir):
+def get_leveldb_rootlist(user_id, cachedir):
     rootpath = os.path.expanduser(cachedir)
-    if username:
-        dirpath = os.path.join(rootpath, username) + "-user"
+    if user_id:
+        dirpath = os.path.join(rootpath, user_id) + "-user"
     else:
         dirpath = rootpath
-    key_templates = [LEVELDB_ROOTLIST_KEY_1, LEVELDB_ROOTLIST_KEY_2]
-    if sys.platform == "win32":  # based on @Nitemice research
-        key_templates.reverse()
 
-    # Four attempts
+    # Two attempts
+    key_template = LEVELDB_ROOTLIST_KEY
     for slow_mode in (False, True):
-        for key_template in key_templates:
-            key = (
-                SpotifyLevelDB.make_key_from_username(key_template, username)
-                if username
-                else key_template
-            )
-            result = SpotifyLevelDB.get(
-                key, dirpath, key_is_template=not username, ignore_comparator=slow_mode
-            )
-            if result[1]:
-                return result
+        key = (
+            SpotifyLevelDB.make_key_from_user_id(key_template, user_id)
+            if user_id
+            else key_template
+        )
+        result = SpotifyLevelDB.get(
+            key, dirpath, key_is_template=not user_id, ignore_comparator=slow_mode
+        )
+        if result[1]:
+            return result
 
     return result
 
 
-def get_usernames(users_directory_path):
+def get_user_ids(users_directory_path):
     basepath = os.path.expanduser(users_directory_path)
     return [
         folder.rsplit("-")[0]
@@ -180,9 +174,9 @@ def get_usernames(users_directory_path):
     ]
 
 
-def print_info_text(usernames):
+def print_info_text(user_ids):
     """Prints info text about Spotify users with PersistentCache storage files."""
-    number = len(usernames)
+    number = len(user_ids)
     suffix = "" if number == 1 else "s"
     if number:
         print()
@@ -193,7 +187,7 @@ def print_info_text(usernames):
         print(".")
         return
     print()
-    for name in usernames:
+    for name in user_ids:
         print(" -", name)
     print()
     print(
@@ -229,8 +223,8 @@ class SpotifyLevelDB:
     @staticmethod
     def get(key, db_dirpath, key_is_template=False, ignore_comparator=False):
         # passing a key with '{}' in it and `key_is_template=True` will
-        # try to deduce a username from the given files; the last
-        # modified user is returned first. The username is put at '{}'.
+        # try to deduce a rootlist_id from the given files; the last
+        # modified user is returned first. The rootlist_id is put at '{}'.
         files_to_examine = get_files_in_dir_modified_last_first(db_dirpath)
 
         def seek(file_suffix, reader_cls, key):
@@ -247,8 +241,8 @@ class SpotifyLevelDB:
                 else:
                     value = reader_cls.find(key, filepath)
                 if value:
-                    username = SpotifyLevelDB.extract_username_from_filepath(filepath)
-                    return username, value
+                    user_id = SpotifyLevelDB.extract_user_id_from_filepath(filepath)
+                    return user_id, value
 
         # Case 1: check log files (no external libraries needed)
         result = seek(".log", LogReader, key)
@@ -263,7 +257,7 @@ class SpotifyLevelDB:
         return None, None
 
     @staticmethod
-    def extract_username_from_filepath(filepath):
+    def extract_user_id_from_filepath(filepath):
         head = filepath
         last_head = ""
         while head != last_head:
@@ -274,14 +268,17 @@ class SpotifyLevelDB:
 
     @staticmethod
     def make_key_from_filepath(key_template, filepath):
-        username = SpotifyLevelDB.extract_username_from_filepath(filepath)
-        if not username:
+        user_id = SpotifyLevelDB.extract_user_id_from_filepath(filepath)
+        if not user_id:
             return
-        return SpotifyLevelDB.make_key_from_username(key_template, username)
+        return SpotifyLevelDB.make_key_from_user_id(key_template, user_id)
 
     @staticmethod
-    def make_key_from_username(key_template, username):
-        return key_template.replace(b"{}", username.encode())
+    def make_key_from_user_id(key_template, user_id):
+        user_id_as_bytes = user_id.encode()
+        rootlist_id = ROOTLIST_ID.replace(b"{}", user_id_as_bytes)
+        rootlist_id_length = len(rootlist_id).to_bytes(1, byteorder="little")
+        return key_template.replace(b"{}", rootlist_id_length + rootlist_id)
 
 
 # Descriptor files
@@ -775,29 +772,29 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    usernames = get_usernames(args.cache_dir)
+    user_ids = get_user_ids(args.cache_dir)
     if args.info:
-        print_info_text(usernames)
+        print_info_text(user_ids)
         sys.exit(0)
 
-    if args.account and args.account not in usernames:
+    if args.account and args.account not in user_ids:
         print(
-            f"Unknown username {args.account!r}. To see all found usernames, use `--info`."
+            f"Unknown user id {args.account!r}. To see all found users, use `--info`."
         )
         sys.exit(2)
 
     folder_id = None
-    username = args.account
+    user_id = args.account
     if args.folder:
         uri = args.folder
         if "/" not in uri and ":" not in uri:
             print("Specify folder as a URL or Spotify URI. See `--help`.")
             sys.exit(2)
         separator = "/" if uri.find("/") > 0 else ":"
-        username = uri.split(separator)[-3]
+        user_id = uri.split(separator)[-3]
         folder_id = uri.split(separator)[-1]
 
-    username, raw_rootlist = get_leveldb_rootlist(username, args.cache_dir)
+    user_id, raw_rootlist = get_leveldb_rootlist(user_id, args.cache_dir)
     if not raw_rootlist:
         print(
             "No data found in the Spotify cache. If you have a custom cache\n"
@@ -807,4 +804,4 @@ if __name__ == "__main__":
         )
         sys.exit(2)
 
-    print(_process(raw_rootlist, username, folder_id))
+    print(_process(raw_rootlist, user_id, folder_id))
