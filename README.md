@@ -13,7 +13,7 @@ curl -L https://git.io/folders > /usr/local/bin/spotifyfolders
 chmod +x /usr/local/bin/spotifyfolders
 ```
 
-If your folder hierarchy is stored in a compressed format, you may receive additional instructions on how to install the "snappy" decompression library.
+If your folder hierarchy is stored in a compressed format, you may receive additional instructions on how to install the "snappy" decompression library. Also, you may want to close the Spotify app before running this to ensure data access and completeness.
 
 ## Get your entire folder hierarchy
 
