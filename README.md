@@ -1,8 +1,3 @@
-> [!WARNING]  
-> **BREAKING CHANGE**. Spotify changed the cache storage tech as of 2023-11-30. The code was substantially rewritten. Please help test the new setup and report any issues in [this thread](https://github.com/mikez/spotify-folders/issues/10).
-
----
-
 Get your Spotify folder hierarchy with playlists into a JSON file.
 
 **Requirements**: Spotify for Mac, Linux, or Windows.
